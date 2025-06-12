@@ -7,9 +7,15 @@ from flask import Flask, render_template, request, flash, redirect, url_for, cur
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 import google.generativeai as genai
+from flask import Flask, render_template, request, flash, redirect, url_for, current_app
 
 # Load environment variables from a .env file
 load_dotenv() 
+
+project_root = os.path.dirname(os.path.realpath(__file__))
+template_folder = os.path.join(project_root, 'templates')
+static_folder = os.path.join(project_root, 'static') # Also good practice for static files
+
 
 # Configure the Google AI API
 try:
@@ -17,7 +23,7 @@ try:
 except AttributeError:
     print("ERROR: Google AI API key not configured. Please set GOOGLE_API_KEY in your .env file.")
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder=template_folder, static_folder=static_folder)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'a_default_secret_key_for_development')
 
 # --- Helper functions for text extraction ---
