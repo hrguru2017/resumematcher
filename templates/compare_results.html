@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comparison Results</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; line-height: 1.6; color: #333; background-color: #f4f4f4; margin: 0; padding: 20px; }
+        .container { max-width: 900px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h1, h2, h3 { color: #2c3e50; }
+        a.button { display: inline-block; padding: 12px 18px; background-color: #3498db; color: white; border: none; border-radius: 4px; font-size: 1.1em; cursor: pointer; text-decoration: none; text-align: center; }
+        a.button:hover { background-color: #2980b9; }
+        hr { border: 0; height: 1px; background-color: #ccc; margin: 30px 0; }
+        .score-box { text-align: center; margin: 20px 0; }
+        .score-circle { display: inline-block; width: 150px; height: 150px; border-radius: 50%; background-color: #e9ecef; border: 8px solid #28a745; line-height: 134px; font-size: 2.5em; font-weight: bold; color: #2c3e50; }
+        .summary { font-size: 1.1em; text-align: center; font-style: italic; color: #555; max-width: 600px; margin: 15px auto; }
+        .skills-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
+        .skills-list { background: #f8f9fa; padding: 15px; border-radius: 4px; }
+        .skills-list h3 { margin-top: 0; }
+        .skills-list ul { padding-left: 20px; margin: 0; }
+        .skills-list li { margin-bottom: 5px; }
+        #matching-skills h3 { color: #28a745; }
+        #missing-skills h3 { color: #e74c3c; }
+        @media (max-width: 600px) { .skills-grid { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="{{ url_for('compare') }}" class="button" style="margin-bottom: 20px;">&larr; Run New Comparison</a>
+
+        {% if comparison %}
+            <header style="text-align: center;">
+                <h1>Match Report</h1>
+                <h2>{{ jd_title }} vs. {{ candidate_name }}</h2>
+            </header>
+
+            {% if comparison.error %}
+                <div class="flash-message danger">Error during comparison: {{ comparison.error }}</div>
+            {% else %}
+                <div class="score-box">
+                    <h3>Overall Match Score</h3>
+                    <div class="score-circle" style="border-color: hsl({{ (comparison.match_score or 0) * 1.2 }}, 80%, 45%);">
+                        {{ comparison.match_score or 0 }}%
+                    </div>
+                </div>
+
+                <div class="summary">
+                    <h3>Summary</h3>
+                    <p>{{ comparison.summary or "No summary generated." }}</p>
+                </div>
+
+                <hr>
+
+                <div class="skills-grid">
+                    <div id="matching-skills" class="skills-list">
+                        <h3>Matching Skills</h3>
+                        {% if comparison.matching_skills %}
+                            <ul>
+                            {% for skill in comparison.matching_skills %}
+                                <li>{{ skill }}</li>
+                            {% endfor %}
+                            </ul>
+                        {% else %}
+                            <p>No matching skills found.</p>
+                        {% endif %}
+                    </div>
+                    <div id="missing-skills" class="skills-list">
+                        <h3>Missing Key Skills</h3>
+                        {% if comparison.missing_skills %}
+                            <ul>
+                            {% for skill in comparison.missing_skills %}
+                                <li>{{ skill }}</li>
+                            {% endfor %}
+                            </ul>
+                        {% else %}
+                            <p>No key missing skills identified.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endif %}
+
+        {% else %}
+            <h1>Analysis Failed</h1>
+            <p>Could not generate a comparison report. Please go back and try again.</p>
+        {% endif %}
+    </div>
+</body>
+</html>
