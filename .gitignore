@@ -1,0 +1,17 @@
+# Virtual Environment
+venv/
+parser/ # The venv folder you created earlier was named 'parser' in the logs
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Instance folder - often contains secrets and databases
+instance/
+
+# Environment variables
+.env
+
+# IDE settings folders
+.vscode/
+.idea/
