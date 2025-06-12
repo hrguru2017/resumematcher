@@ -8,22 +8,12 @@ from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 import google.generativeai as genai
 
-# --- Path Definitions & Debugging ---
-# Get the absolute path of the directory where this file (app.py) is located.
+# --- Path Definitions for Deployment ---
 project_root = os.path.dirname(os.path.abspath(__file__))
-# Define the absolute path to the templates folder.
 template_folder = os.path.join(project_root, 'templates')
-# Define the absolute path to the static folder.
 static_folder = os.path.join(project_root, 'static')
 
-# --- Add a print statement to see what path is being calculated in the Render environment ---
-print(f"--- SERVER STARTUP DEBUG ---")
-print(f"Project Root Path: {project_root}")
-print(f"Template Folder Path: {template_folder}")
-print(f"Static Folder Path: {static_folder}")
-print(f"--- END SERVER STARTUP DEBUG ---")
-
-
+# Load environment variables
 load_dotenv() 
 
 try:
@@ -31,10 +21,12 @@ try:
 except AttributeError:
     print("ERROR: Google AI API key not configured. Please set GOOGLE_API_KEY in your .env file.")
 
-# Create the Flask app instance, explicitly telling it where to find the templates and static files.
+# Create the Flask app instance using the explicit folder paths
 app = Flask(__name__, template_folder=template_folder, static_folder=static_folder)
 
+# Set the secret key for session management (e.g., for flash messages)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'a_default_secret_key_for_development')
+
 
 # --- Helper functions for text extraction ---
 ALLOWED_EXTENSIONS = {'pdf', 'docx'}
@@ -43,9 +35,8 @@ def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# ... (The rest of your app.py file remains exactly the same) ...
-# ... (extract_text_from_pdf, extract_text_from_docx, analyze_jd_with_llm, etc.) ...
 def extract_text_from_pdf(file_bytes):
+    """Extracts text from a PDF file's byte content."""
     text = ""
     try:
         with fitz.open(stream=file_bytes, filetype="pdf") as doc:
@@ -55,7 +46,9 @@ def extract_text_from_pdf(file_bytes):
         current_app.logger.error(f"Error reading PDF: {e}")
         return None
     return text
+
 def extract_text_from_docx(file_bytes):
+    """Extracts text from a DOCX file's byte content."""
     text = ""
     try:
         in_memory_stream = io.BytesIO(file_bytes)
@@ -67,31 +60,22 @@ def extract_text_from_docx(file_bytes):
         return None
     return text
 
+# --- AI Helper Functions ---
 def analyze_jd_with_llm(jd_text):
     model = genai.GenerativeModel('gemini-1.5-flash-latest')
     prompt = f"""
-    You are an expert HR analyst... The JSON object must have the following keys:
-    - "job_title": string
-    - "company_name": string
-    - "job_locations": list of strings
-    - "employment_type": string
-    - "experience_required": string
-    - "leadership_experience": string or null
-    - "technical_skills": list of strings
-    - "domain_knowledge": list of strings
-    - "educational_requirements": string
-    - "top_responsibilities": list of strings
-    - "role_persona": string
+    You are an expert HR analyst specializing in parsing job descriptions. Analyze the following job description and extract the specified information into a valid JSON object.
 
-    Instructions for specific keys:
-    - For "top_responsibilities": Summarize the primary duties into a list of the top 5-6 most important points.
-    - For "role_persona": Write a 2-3 sentence summary... This summary **must** weave in the 2-3 most critical technical skills...
+    The JSON object must have these keys: "job_title", "company_name", "job_locations", "employment_type", "experience_required", "leadership_experience", "technical_skills", "domain_knowledge", "educational_requirements", "top_responsibilities", "role_persona", "job_summary".
     
-    Job Description Text: ---
+    (Instructions for specific keys as before...)
+
+    Job Description Text:
+    ---
     {jd_text}
     ---
-    
-    IMPORTANT: Your entire response must be ONLY the raw text of a valid JSON object, starting with `{{` and ending with `}}`.
+
+    IMPORTANT: Your entire response must be ONLY the raw text of a valid JSON object, starting with `{{` and ending with `}}`. Do not include any other text, explanations, or markdown formatting.
     """
     try:
         response = model.generate_content(prompt)
@@ -106,43 +90,22 @@ def analyze_jd_with_llm(jd_text):
         current_app.logger.error(f"LLM Response Text (JD) was: {raw_response_text}")
         return {"error": str(e), "raw_response": raw_response_text}
 
-def generate_boolean_search(analysis_results):
-    model = genai.GenerativeModel('gemini-1.5-flash-latest')
-    relevant_info = {
-        "job_title": analysis_results.get("job_title"),
-        "technical_skills": analysis_results.get("technical_skills", []),
-        "top_responsibilities": analysis_results.get("top_responsibilities", [])
-    }
-    info_json_str = json.dumps(relevant_info, indent=2)
-    prompt = f"""
-    You are an expert technical sourcer... Based on the following structured job details, generate a single, concise, and effective Boolean search string...
-    (rest of prompt as before)
-    """
-    try:
-        response = model.generate_content(prompt)
-        return response.text.strip()
-    except Exception as e:
-        current_app.logger.error(f"Error generating boolean search: {e}")
-        return "Error creating boolean search query."
-
-def generate_recruiter_script(analysis_results):
-    model = genai.GenerativeModel('gemini-1.5-flash-latest')
-    results_json_str = json.dumps(analysis_results, indent=2)
-    prompt = f"""
-    You are an expert hiring consultant creating a script for a recruiter... Based on the following structured job details, generate a list of 4-5 simple screening questions...
-    (rest of prompt as before)
-    """
-    try:
-        response = model.generate_content(prompt)
-        return response.text.strip()
-    except Exception as e:
-        current_app.logger.error(f"Error during script generation: {e}")
-        return "There was an error generating the screening questions."
-
 def analyze_resume_with_llm(resume_text):
     model = genai.GenerativeModel('gemini-1.5-flash-latest')
     prompt = f"""
-    You are an expert HR recruitment specialist... (rest of resume analysis prompt as before)
+    You are an expert HR recruitment specialist, skilled at parsing resumes. Analyze the following resume text and extract the specified information in a valid JSON format.
+
+    The JSON object must have these two top-level keys: "work_experience" and "top_technical_skills".
+
+    1.  For "work_experience", the value must be a list of objects in reverse chronological order (most recent first). Each object must have these keys: "company_name", "job_title", "duration", "responsibilities" (as a list of strings).
+    2.  For "top_technical_skills", the value must be a list of the 5 most prominent technical skills mentioned within the work experience sections.
+
+    Here is the resume text:
+    ---
+    {resume_text}
+    ---
+
+    IMPORTANT: Your entire response must be ONLY the raw text of a valid JSON object, starting with `{{` and ending with `}}`. Do not include any other text, explanations, or markdown formatting.
     """
     try:
         response = model.generate_content(prompt)
@@ -162,7 +125,19 @@ def compare_jd_to_resume(jd_results, resume_results):
     jd_json_str = json.dumps(jd_results, indent=2)
     resume_json_str = json.dumps(resume_results, indent=2)
     prompt = f"""
-    You are an expert senior technical recruiter... (rest of comparison prompt as before)
+    You are an expert senior technical recruiter... Compare the candidate's resume against the job description and return ONLY a valid JSON object with these keys: "matching_skills", "missing_skills", "match_score", "summary".
+
+    **Job Requirements (JSON):**
+    ```json
+    {jd_json_str}
+    ```
+
+    **Candidate's Resume Data (JSON):**
+    ```json
+    {resume_json_str}
+    ```
+
+    IMPORTANT: Your entire response must be ONLY the raw text of a valid JSON object, starting with `{{` and ending with `}}`. Do not include any other text, explanations, or markdown formatting.
     """
     try:
         response = model.generate_content(prompt)
@@ -177,10 +152,11 @@ def compare_jd_to_resume(jd_results, resume_results):
         current_app.logger.error(f"LLM Response Text (Comparison) was: {raw_response_text}")
         return {"error": str(e), "raw_response": raw_response_text}
 
-# --- Main Routes ---
+# --- All other helper functions and routes as before ---
 @app.route('/', methods=['GET', 'POST'])
 def index():
     if request.method == 'POST':
+        # ... (JD processing logic as before) ...
         extracted_text = None
         pasted_text = request.form.get('jd_text', '').strip()
         if pasted_text: extracted_text = pasted_text
@@ -198,11 +174,9 @@ def index():
                 return redirect(request.url)
         
         if extracted_text:
-            flash("Text extracted. Now analyzing with AI...", 'info')
             analysis_results = analyze_jd_with_llm(extracted_text)
             if analysis_results and "error" not in analysis_results:
-                analysis_results['boolean_search_query'] = generate_boolean_search(analysis_results)
-                analysis_results['recruiter_script'] = generate_recruiter_script(analysis_results)
+                # We are no longer generating the boolean search and script here
                 return render_template('results.html', results=analysis_results)
             else:
                 flash(f"An error occurred during AI analysis. Please check server logs.", 'danger')
@@ -235,10 +209,8 @@ def resume_analyzer():
                 return redirect(request.url)
         
         if extracted_text:
-            flash("Resume text extracted. Now analyzing with AI...", "info")
             analysis_results = analyze_resume_with_llm(extracted_text)
             if analysis_results and "error" not in analysis_results:
-                flash("Resume analysis complete!", "success")
                 return render_template('resume_results.html', results=analysis_results)
             else:
                 flash(f"An error occurred during AI analysis. Please check server logs.", 'danger')
@@ -303,8 +275,10 @@ def compare():
         
         candidate_name = "Candidate"
         if resume_results.get('work_experience') and len(resume_results['work_experience']) > 0:
-             # Heuristic: try to find a 'name' field if the LLM adds it, or use a placeholder
-             # Since we don't explicitly ask for candidate name, we'll stick to a generic title.
+             # Heuristic: try to get candidate name if available.
+             first_job = resume_results['work_experience'][0]
+             # This assumes resume analysis can extract candidate name - our current prompt does not.
+             # We can add this to the resume analysis prompt later if needed.
              pass
 
         return render_template('compare_results.html', 
